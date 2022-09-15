@@ -1,3 +1,23 @@
-from django.shortcuts import render
+"""This module is for views creation
+"""
+from django.contrib.auth.models import User
+from rest_framework import permissions
+from rest_framework.generics import CreateAPIView, ListAPIView
 
-# Create your views here.
+from .serializers import UserRegisterSerializer
+
+
+class CreateUserView(CreateAPIView):
+    """API view for registration"""
+
+    queryset = User.objects.all()
+    permission_classes = [permissions.AllowAny]
+    serializer_class = UserRegisterSerializer
+
+
+class ListUserView(ListAPIView):
+    """API view for checking all users"""
+
+    queryset = User.objects.all()
+    permission_classes = [permissions.IsAdminUser]
+    serializer_class = UserRegisterSerializer

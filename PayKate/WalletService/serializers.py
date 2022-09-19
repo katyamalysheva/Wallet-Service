@@ -45,6 +45,8 @@ class WalletSerializer(serializers.ModelSerializer):
     """Serializer for wallet listing and creation"""
 
     class Meta:
+        """fields config"""
+
         model = Wallet
         fields = (
             "name",
@@ -63,10 +65,11 @@ class WalletSerializer(serializers.ModelSerializer):
         - ctreates random name,
         - sets bonus balance according to currency
         """
-        print(validated_data)
         count = Wallet.objects.filter(user=validated_data["user"]).count()
         if count >= Wallet.max_user_wallets():
-            raise serializers.ValidationError("You can't have more then 5 wallets")
+            raise serializers.ValidationError(
+                f"You can't have more then {Wallet.max_user_wallets()} wallets"
+            )
         name = "".join(
             random.SystemRandom().choice(string.ascii_uppercase + string.digits)
             for _ in range(settings.WALLET_NAME_LENGTH)
@@ -75,7 +78,7 @@ class WalletSerializer(serializers.ModelSerializer):
         wallet = Wallet.objects.create(
             name=name,
             **validated_data,
-            balance=Wallet.get_bonus(validated_data["currency"])
+            balance=Wallet.get_bonus(validated_data["currency"]),
         )
 
         return wallet

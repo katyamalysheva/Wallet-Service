@@ -59,7 +59,7 @@ class WalletDetailView(RetrieveDestroyAPIView):
         return Wallet.objects.filter(user=user)
 
     def delete(self, request, *args, **kwargs):
-        "Deletes user's wallet"
+        """Deletes user's wallet"""
         name = kwargs["name"]
         response = super().delete(request, *args, **kwargs)
         return Response(f"Wallet {name} deleted", status=response.status_code)

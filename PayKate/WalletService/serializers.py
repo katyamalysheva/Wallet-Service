@@ -1,9 +1,14 @@
 """
 WalletService serializers
 """
+import random
+import string
+
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
+from WalletService.models import Wallet
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
@@ -21,7 +26,6 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         """Creating user and hashing password"""
         user = User.objects.create(
             username=validated_data["username"],
-            email=validated_data["email"],
         )
         user.set_password(validated_data["password"])
         user.save()
@@ -35,3 +39,43 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         validate_password(attrs["password"])
         attrs.pop("password2")
         return super().validate(attrs)
+
+
+class WalletSerializer(serializers.ModelSerializer):
+    """Serializer for wallet listing and creation"""
+
+    class Meta:
+        model = Wallet
+        fields = (
+            "name",
+            "type",
+            "currency",
+            "balance",
+            "user",
+            "created_on",
+            "modified_on",
+        )
+        read_only_fields = ("name", "balance", "user")
+
+    def create(self, validated_data):
+        """Method that creates a wallet instance:
+        - checks if user can have one more wallet,
+        - ctreates random name,
+        - sets bonus balance according to currency
+        """
+        print(validated_data)
+        count = Wallet.objects.filter(user=validated_data["user"]).count()
+        if count >= Wallet.max_user_wallets():
+            raise serializers.ValidationError("You can't have more then 5 wallets")
+        name = "".join(
+            random.SystemRandom().choice(string.ascii_uppercase + string.digits)
+            for _ in range(settings.WALLET_NAME_LENGTH)
+        )
+
+        wallet = Wallet.objects.create(
+            name=name,
+            **validated_data,
+            balance=Wallet.get_bonus(validated_data["currency"])
+        )
+
+        return wallet

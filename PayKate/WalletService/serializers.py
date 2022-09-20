@@ -8,7 +8,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from WalletService.models import CARDS, CURRENCIES, Wallet
+from WalletService.models import CARDS, CURRENCIES, Transaction, Wallet
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
@@ -42,7 +42,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
 
 class WalletSerializer(serializers.ModelSerializer):
-    """Serializer for wallet listing and creation"""
+    """Serializer for wallet listing, creation and deletion"""
 
     # overriding type and currency fields from model to specify validation in serializer,
     # as if not - serializer function validate is called AFTER model (base) field validation,
@@ -106,3 +106,20 @@ class WalletSerializer(serializers.ModelSerializer):
         )
 
         return wallet
+
+
+class TransactionSerializer(serializers.ModelSerializer):
+    """Serializing for transactions' listing"""
+
+    class Meta:
+        model = Transaction
+        fields = (
+            "id",
+            "sender",
+            "receiver",
+            "transfer_amount",
+            "fee",
+            "status",
+            "timestamp",
+        )
+        read_only_fields = ("id", "status")

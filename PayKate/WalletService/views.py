@@ -9,9 +9,9 @@ from rest_framework.generics import (
     RetrieveDestroyAPIView,
 )
 from rest_framework.response import Response
-from WalletService.models import Wallet
+from WalletService.models import Transaction, Wallet
 
-from .serializers import UserRegisterSerializer, WalletSerializer
+from .serializers import TransactionSerializer, UserRegisterSerializer, WalletSerializer
 
 
 class CreateUserView(CreateAPIView):
@@ -63,3 +63,14 @@ class WalletDetailView(RetrieveDestroyAPIView):
         name = kwargs["name"]
         response = super().delete(request, *args, **kwargs)
         return Response(f"Wallet {name} deleted", status=response.status_code)
+
+
+class TransactionListView(ListCreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TransactionSerializer
+
+    def get_queryset(self):
+        """Gets user wallets"""
+        user = self.request.user
+        print(user.receiver.all())
+        return Transaction.objects.all()

@@ -17,6 +17,7 @@ from django.urls import include, path
 from WalletService.views import (
     CreateUserView,
     ListUserView,
+    TransactionListView,
     WalletDetailView,
     WalletListView,
 )
@@ -27,4 +28,5 @@ urlpatterns = [
     path("api-auth/", include("rest_framework.urls")),
     path("wallets/", WalletListView.as_view()),
     path("wallets/<str:name>", WalletDetailView.as_view()),
+    path("transactions/", TransactionListView.as_view()),
 ]

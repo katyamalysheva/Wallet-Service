@@ -11,7 +11,7 @@ CURRENCIES = ["USD", "EUR", "RUB"]
 CARD_CHOICES = [(card, card) for card in CARDS]
 CURRENCY_CHOICES = [(currency, currency) for currency in CURRENCIES]
 
-STATUS_CHOICES = [("P", "PAID"), ("F", "FAILED")]
+STATUS_CHOICES = [("PAID", "PAID"), ("FAILED", "FAILED")]
 
 
 class Wallet(models.Model):
@@ -45,13 +45,16 @@ class Wallet(models.Model):
 class Transaction(models.Model):
     """Model that describes transaction essence"""
 
+    DEFAULT_FEE = 0.10
     sender = models.ForeignKey(Wallet, related_name="sender", on_delete=models.RESTRICT)
     receiver = models.ForeignKey(
         Wallet, related_name="receiver", on_delete=models.RESTRICT
     )
-    transfer_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    fee = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=1, choices=STATUS_CHOICES)
+    transfer_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=DEFAULT_FEE
+    )
+    fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.10)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES)
     timestamp = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -61,4 +64,4 @@ class Transaction(models.Model):
 
     def __str__(self) -> str:
         """Str representation of a transaction"""
-        return f"id:{self.pk}:{self.sender}-{self.receiver}"
+        return f"id:{self.pk} - {self.sender} - {self.receiver}"

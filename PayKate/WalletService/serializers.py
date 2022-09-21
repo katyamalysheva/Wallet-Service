@@ -1,6 +1,7 @@
 """
 WalletService serializers
 """
+import decimal
 import random
 import string
 
@@ -9,6 +10,8 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from WalletService.models import CARDS, CURRENCIES, Transaction, Wallet
+
+# from django.db import transaction
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
@@ -25,7 +28,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """Creating user and hashing password"""
         user = User.objects.create(
-            username=validated_data["username"],
+            username=validated_data["username"], email=validated_data["email"]
         )
         user.set_password(validated_data["password"])
         user.save()
@@ -111,15 +114,92 @@ class WalletSerializer(serializers.ModelSerializer):
 class TransactionSerializer(serializers.ModelSerializer):
     """Serializing for transactions' listing"""
 
+    receiver = serializers.CharField(
+        source="receiver.name", max_length=settings.WALLET_NAME_LENGTH
+    )
+    sender = serializers.CharField(
+        source="sender.name", max_length=settings.WALLET_NAME_LENGTH
+    )
+
     class Meta:
         model = Transaction
         fields = (
             "id",
-            "sender",
             "receiver",
+            "sender",
+            # "receiver_wallet",
+            # "sender_wallet",
             "transfer_amount",
             "fee",
             "status",
             "timestamp",
         )
-        read_only_fields = ("id", "status")
+        read_only_fields = ("id", "status", "fee")
+
+    def validate(self, data):
+        receiver = get_or_none(Wallet, name=data["receiver"]["name"])
+        sender = get_or_none(Wallet, name=data["sender"]["name"])
+
+        if not receiver:
+            raise serializers.ValidationError("Receiver wallet doesn't exist")
+        if not sender:
+            raise serializers.ValidationError("Sender wallet doesn't exist")
+
+        # Needs to be added to permissions
+        """if sender.user != self.context['request'].user:
+            raise serializers.ValidationError("User don't have permission to proceed the operation")"""
+
+        if sender.currency != receiver.currency:
+            raise serializers.ValidationError("Currencies of wallets are not equal")
+
+        if sender.user == receiver.user:
+            if sender.balance < data["transfer_amount"]:
+                raise serializers.ValidationError(
+                    "sender wallet doesn't have enough funds for transaction"
+                )
+        else:
+            if sender.balance < data["transfer_amount"] * decimal.Decimal(
+                1.00 + Transaction.DEFAULT_FEE
+            ):
+                raise serializers.ValidationError(
+                    "sender wallet doesn't have enough funds for transaction"
+                )
+
+        data["receiver"] = receiver
+        data["sender"] = sender
+
+        return data
+
+    def create(self, validated_data):
+
+        sender = validated_data["sender"]
+        receiver = validated_data["receiver"]
+        if sender.user == receiver.user:
+            fee = 0.00
+        else:
+            fee = Transaction.DEFAULT_FEE
+
+        transfer_amount_with_fee = validated_data["transfer_amount"] * decimal.Decimal(
+            str(1.00 + fee)
+        )
+        transaction = Transaction.objects.create(
+            sender=sender,
+            receiver=receiver,
+            fee=fee,
+            transfer_amount=validated_data["transfer_amount"],
+            status="FAILED",
+        )
+        # with transaction.atomic():
+        sender.balance = sender.balance - transfer_amount_with_fee
+        sender.save()
+        receiver.balance = receiver.balance + validated_data["transfer_amount"]
+        receiver.save()
+        transaction.status = "PAID"
+        return transaction
+
+
+def get_or_none(classmodel, **kwargs):
+    try:
+        return classmodel.objects.get(**kwargs)
+    except classmodel.DoesNotExist:
+        return None

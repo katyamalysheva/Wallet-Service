@@ -8,10 +8,10 @@ import string
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
+from django.db import transaction
 from rest_framework import serializers
+from rest_framework.exceptions import NotFound
 from WalletService.models import CARDS, CURRENCIES, Transaction, Wallet
-
-# from django.db import transaction
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
@@ -20,6 +20,8 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     password2 = serializers.CharField(write_only=True)
 
     class Meta:
+        """field configs"""
+
         model = User
         fields = ["id", "username", "password", "password2", "email"]
         write_only_fields = ["password", "password2"]
@@ -60,6 +62,7 @@ class WalletSerializer(serializers.ModelSerializer):
 
         model = Wallet
         fields = (
+            "id",
             "name",
             "type",
             "currency",
@@ -107,12 +110,11 @@ class WalletSerializer(serializers.ModelSerializer):
             **validated_data,
             balance=Wallet.get_bonus(validated_data["currency"]),
         )
-
         return wallet
 
 
 class TransactionSerializer(serializers.ModelSerializer):
-    """Serializing for transactions' listing"""
+    """Serializing for transaction creation and listing"""
 
     receiver = serializers.CharField(
         source="receiver.name", max_length=settings.WALLET_NAME_LENGTH
@@ -122,13 +124,13 @@ class TransactionSerializer(serializers.ModelSerializer):
     )
 
     class Meta:
+        """field config"""
+
         model = Transaction
         fields = (
             "id",
             "receiver",
             "sender",
-            # "receiver_wallet",
-            # "sender_wallet",
             "transfer_amount",
             "fee",
             "status",
@@ -137,17 +139,14 @@ class TransactionSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "status", "fee")
 
     def validate(self, data):
-        receiver = get_or_none(Wallet, name=data["receiver"]["name"])
-        sender = get_or_none(Wallet, name=data["sender"]["name"])
+        """Serializer data validation"""
+        receiver = get_object_if_exists(Wallet, name=data["receiver"]["name"])
+        sender = get_object_if_exists(Wallet, name=data["sender"]["name"])
 
         if not receiver:
-            raise serializers.ValidationError("Receiver wallet doesn't exist")
+            raise NotFound(detail="Receiver wallet doesn't exist", code=404)
         if not sender:
-            raise serializers.ValidationError("Sender wallet doesn't exist")
-
-        # Needs to be added to permissions
-        """if sender.user != self.context['request'].user:
-            raise serializers.ValidationError("User don't have permission to proceed the operation")"""
+            raise NotFound(detail="Sender wallet doesn't exist", code=404)
 
         if sender.currency != receiver.currency:
             raise serializers.ValidationError("Currencies of wallets are not equal")
@@ -155,14 +154,14 @@ class TransactionSerializer(serializers.ModelSerializer):
         if sender.user == receiver.user:
             if sender.balance < data["transfer_amount"]:
                 raise serializers.ValidationError(
-                    "sender wallet doesn't have enough funds for transaction"
+                    "Sender wallet doesn't have enough funds for transaction"
                 )
         else:
-            if sender.balance < data["transfer_amount"] * decimal.Decimal(
-                1.00 + Transaction.DEFAULT_FEE
+            if sender.balance < data["transfer_amount"] * round(
+                decimal.Decimal(1.00 + Transaction.DEFAULT_FEE), 2
             ):
                 raise serializers.ValidationError(
-                    "sender wallet doesn't have enough funds for transaction"
+                    "Sender wallet doesn't have enough funds for transaction"
                 )
 
         data["receiver"] = receiver
@@ -171,6 +170,7 @@ class TransactionSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
+        """Transaction creation method"""
 
         sender = validated_data["sender"]
         receiver = validated_data["receiver"]
@@ -179,27 +179,31 @@ class TransactionSerializer(serializers.ModelSerializer):
         else:
             fee = Transaction.DEFAULT_FEE
 
-        transfer_amount_with_fee = validated_data["transfer_amount"] * decimal.Decimal(
-            str(1.00 + fee)
+        transfer_amount_with_fee = validated_data["transfer_amount"] * round(
+            decimal.Decimal(1.00 + fee), 2
         )
-        transaction = Transaction.objects.create(
+        transaction_ = Transaction.objects.create(
             sender=sender,
             receiver=receiver,
             fee=fee,
             transfer_amount=validated_data["transfer_amount"],
             status="FAILED",
         )
-        # with transaction.atomic():
-        sender.balance = sender.balance - transfer_amount_with_fee
-        sender.save()
-        receiver.balance = receiver.balance + validated_data["transfer_amount"]
-        receiver.save()
-        transaction.status = "PAID"
-        return transaction
+
+        with transaction.atomic():
+            sender.balance = sender.balance - transfer_amount_with_fee
+            sender.save()
+            receiver.balance = receiver.balance + validated_data["transfer_amount"]
+            receiver.save()
+            transaction_.status = "PAID"
+            transaction_.save()
+
+        return transaction_
 
 
-def get_or_none(classmodel, **kwargs):
+def get_object_if_exists(classmodel, **kwargs):
+    """function to handle model DoesNotExist exception"""
     try:
         return classmodel.objects.get(**kwargs)
     except classmodel.DoesNotExist:
-        return None
+        return

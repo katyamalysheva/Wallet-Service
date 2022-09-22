@@ -70,12 +70,14 @@ class WalletDetailView(RetrieveDestroyAPIView):
 
 
 class TransactionViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    """API viewset for transactions"""
+
+    permission_classes = [permissions.IsAuthenticated, SenderWalletOwnerPermission]
     serializer_class = TransactionSerializer
     lookup_field = "id"
 
     def get_queryset(self):
-        """Gets user wallets"""
+        """Gets users transactions"""
         user = self.request.user
         user_wallet = user.wallet_set.all()
         user_transactions = Transaction.objects.filter(
@@ -85,10 +87,13 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
 
 class WalletTransactionView(ListAPIView):
-    permission_classes = [permissions.IsAuthenticated, SenderWalletOwnerPermission]
+    """API view for listing transaction made with a particular user wallet"""
+
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = TransactionSerializer
 
     def get_queryset(self):
+        """Gets transactions of a wallet"""
         wallet_name = self.kwargs["name"]
         user = self.request.user
         user_wallets = list(user.wallet_set.all().values("name"))
@@ -97,9 +102,10 @@ class WalletTransactionView(ListAPIView):
                 return Transaction.objects.filter(
                     Q(receiver__name=wallet_name) | Q(sender__name=wallet_name)
                 )
-        return []
+        return
 
     def list(self, request, *args, **kwargs):
+        """Lists transaction if exist. If not - 404"""
         queryset = self.get_queryset()
         if not queryset:
             return Response(

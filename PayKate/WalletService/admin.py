@@ -1,3 +1,4 @@
+"""Models registered in admin"""
 from django.contrib import admin
 from WalletService.models import Transaction, Wallet
 

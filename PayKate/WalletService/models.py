@@ -18,7 +18,8 @@ class Wallet(models.Model):
     """Model that describes wallet essense"""
 
     MAX_USER_WALLETS = 5
-    __bonus = {"USD": 3.00, "EUR": 3.00, "RUB": 100.00}
+    BONUS = {"USD": 3.00, "EUR": 3.00, "RUB": 100.00}
+
     name = models.CharField(max_length=settings.WALLET_NAME_LENGTH, unique=True)
     type = models.CharField(choices=CARD_CHOICES, max_length=10)
     currency = models.CharField(choices=CURRENCY_CHOICES, max_length=3)
@@ -35,11 +36,6 @@ class Wallet(models.Model):
     def __str__(self) -> str:
         """Str representation of a wallet"""
         return f"Owner: {self.user}, wallet: {self.name}"
-
-    @classmethod
-    def get_bonus(cls, currency):
-        """Metod that helps recognise bonus"""
-        return cls.__bonus[currency]
 
 
 class Transaction(models.Model):

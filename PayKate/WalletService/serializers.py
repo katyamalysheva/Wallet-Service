@@ -108,7 +108,7 @@ class WalletSerializer(serializers.ModelSerializer):
         wallet = Wallet.objects.create(
             name=name,
             **validated_data,
-            balance=Wallet.get_bonus(validated_data["currency"]),
+            balance=Wallet.BONUS(validated_data["currency"]),
         )
         return wallet
 

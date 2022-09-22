@@ -19,7 +19,7 @@ class SenderWalletOwnerPermission(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         else:
-            wallet = get_object_if_exists(Wallet, name=request.data["sender"])
+            wallet = get_object_if_exists(Wallet, name=request.data.get("sender"))
             if wallet:
                 return wallet.user == request.user
             else:

@@ -1,14 +1,17 @@
 """
 WalletService serializers
 """
+import decimal
 import random
 import string
 
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
+from django.db import transaction
 from rest_framework import serializers
-from WalletService.models import CARDS, CURRENCIES, Wallet
+from rest_framework.exceptions import NotFound
+from WalletService.models import CARDS, CURRENCIES, Transaction, Wallet
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
@@ -17,6 +20,8 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     password2 = serializers.CharField(write_only=True)
 
     class Meta:
+        """field configs"""
+
         model = User
         fields = ["id", "username", "password", "password2", "email"]
         write_only_fields = ["password", "password2"]
@@ -25,7 +30,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """Creating user and hashing password"""
         user = User.objects.create(
-            username=validated_data["username"],
+            username=validated_data["username"], email=validated_data["email"]
         )
         user.set_password(validated_data["password"])
         user.save()
@@ -42,7 +47,7 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
 
 class WalletSerializer(serializers.ModelSerializer):
-    """Serializer for wallet listing and creation"""
+    """Serializer for wallet listing, creation and deletion"""
 
     # overriding type and currency fields from model to specify validation in serializer,
     # as if not - serializer function validate is called AFTER model (base) field validation,
@@ -57,6 +62,7 @@ class WalletSerializer(serializers.ModelSerializer):
 
         model = Wallet
         fields = (
+            "id",
             "name",
             "type",
             "currency",
@@ -102,7 +108,102 @@ class WalletSerializer(serializers.ModelSerializer):
         wallet = Wallet.objects.create(
             name=name,
             **validated_data,
-            balance=Wallet.get_bonus(validated_data["currency"]),
+            balance=Wallet.BONUS(validated_data["currency"]),
+        )
+        return wallet
+
+
+class TransactionSerializer(serializers.ModelSerializer):
+    """Serializing for transaction creation and listing"""
+
+    receiver = serializers.CharField(
+        source="receiver.name", max_length=settings.WALLET_NAME_LENGTH
+    )
+    sender = serializers.CharField(
+        source="sender.name", max_length=settings.WALLET_NAME_LENGTH
+    )
+
+    class Meta:
+        """field config"""
+
+        model = Transaction
+        fields = (
+            "id",
+            "receiver",
+            "sender",
+            "transfer_amount",
+            "fee",
+            "status",
+            "timestamp",
+        )
+        read_only_fields = ("id", "status", "fee")
+
+    def validate(self, data):
+        """Serializer data validation"""
+        receiver = get_object_if_exists(Wallet, name=data["receiver"]["name"])
+        sender = get_object_if_exists(Wallet, name=data["sender"]["name"])
+
+        if not receiver:
+            raise NotFound(detail="Receiver wallet doesn't exist", code=404)
+        if not sender:
+            raise NotFound(detail="Sender wallet doesn't exist", code=404)
+
+        if sender.currency != receiver.currency:
+            raise serializers.ValidationError("Currencies of wallets are not equal")
+
+        if sender.user == receiver.user:
+            if sender.balance < data["transfer_amount"]:
+                raise serializers.ValidationError(
+                    "Sender wallet doesn't have enough funds for transaction"
+                )
+        else:
+            if sender.balance < data["transfer_amount"] * round(
+                decimal.Decimal(1.00 + Transaction.DEFAULT_FEE), 2
+            ):
+                raise serializers.ValidationError(
+                    "Sender wallet doesn't have enough funds for transaction"
+                )
+
+        data["receiver"] = receiver
+        data["sender"] = sender
+
+        return data
+
+    def create(self, validated_data):
+        """Transaction creation method"""
+
+        sender = validated_data["sender"]
+        receiver = validated_data["receiver"]
+        if sender.user == receiver.user:
+            fee = 0.00
+        else:
+            fee = Transaction.DEFAULT_FEE
+
+        transfer_amount_with_fee = validated_data["transfer_amount"] * round(
+            decimal.Decimal(1.00 + fee), 2
+        )
+        transaction_ = Transaction.objects.create(
+            sender=sender,
+            receiver=receiver,
+            fee=fee,
+            transfer_amount=validated_data["transfer_amount"],
+            status="FAILED",
         )
 
-        return wallet
+        with transaction.atomic():
+            sender.balance = sender.balance - transfer_amount_with_fee
+            sender.save()
+            receiver.balance = receiver.balance + validated_data["transfer_amount"]
+            receiver.save()
+            transaction_.status = "PAID"
+            transaction_.save()
+
+        return transaction_
+
+
+def get_object_if_exists(classmodel, **kwargs):
+    """function to handle model DoesNotExist exception"""
+    try:
+        return classmodel.objects.get(**kwargs)
+    except classmodel.DoesNotExist:
+        return

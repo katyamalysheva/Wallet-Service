@@ -13,18 +13,29 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+from django.contrib import admin
 from django.urls import include, path
-from WalletService.views import (
+from django.views.generic.base import RedirectView
+from WalletService.views import (  # TransactionDetailView,; TransactionListView,
     CreateUserView,
     ListUserView,
+    TransactionViewSet,
     WalletDetailView,
     WalletListView,
+    WalletTransactionView,
 )
 
+transaction_list = TransactionViewSet.as_view({"get": "list", "post": "create"})
+transaction_detail = TransactionViewSet.as_view({"get": "retrieve"})
 urlpatterns = [
+    path("admin/", admin.site.urls),
+    path("", RedirectView.as_view(pattern_name="wallets-list", permanent=True)),
     path("register/", CreateUserView.as_view(), name="user-registration"),
     path("users/", ListUserView.as_view(), name="user-list"),
     path("api-auth/", include("rest_framework.urls")),
-    path("wallets/", WalletListView.as_view()),
+    path("wallets/", WalletListView.as_view(), name="wallets-list"),
     path("wallets/<str:name>", WalletDetailView.as_view()),
+    path("transactions/", transaction_list),
+    path("transactions/<int:id>", transaction_detail),
+    path("transactions/<str:name>", WalletTransactionView.as_view()),
 ]

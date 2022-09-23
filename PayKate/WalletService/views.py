@@ -1,7 +1,9 @@
 """This module is for views creation
 """
+
 from django.contrib.auth.models import User
-from rest_framework import permissions
+from django.db.models import Q
+from rest_framework import permissions, viewsets
 from rest_framework.generics import (
     CreateAPIView,
     ListAPIView,
@@ -9,9 +11,11 @@ from rest_framework.generics import (
     RetrieveDestroyAPIView,
 )
 from rest_framework.response import Response
-from WalletService.models import Wallet
+from rest_framework.status import HTTP_404_NOT_FOUND
+from WalletService.models import Transaction, Wallet
+from WalletService.permissions import SenderWalletOwnerPermission
 
-from .serializers import UserRegisterSerializer, WalletSerializer
+from .serializers import TransactionSerializer, UserRegisterSerializer, WalletSerializer
 
 
 class CreateUserView(CreateAPIView):
@@ -63,3 +67,49 @@ class WalletDetailView(RetrieveDestroyAPIView):
         name = kwargs["name"]
         response = super().delete(request, *args, **kwargs)
         return Response(f"Wallet {name} deleted", status=response.status_code)
+
+
+class TransactionViewSet(viewsets.ModelViewSet):
+    """API viewset for transactions"""
+
+    permission_classes = [permissions.IsAuthenticated, SenderWalletOwnerPermission]
+    serializer_class = TransactionSerializer
+    lookup_field = "id"
+
+    def get_queryset(self):
+        """Gets users transactions"""
+        user = self.request.user
+        user_wallet = user.wallet_set.all()
+        user_transactions = Transaction.objects.filter(
+            Q(receiver__in=user_wallet) | Q(sender__in=user_wallet)
+        )
+        return user_transactions
+
+
+class WalletTransactionView(ListAPIView):
+    """API view for listing transaction made with a particular user wallet"""
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TransactionSerializer
+
+    def get_queryset(self):
+        """Gets transactions of a wallet"""
+        wallet_name = self.kwargs["name"]
+        user = self.request.user
+        user_wallets = list(user.wallet_set.all().values("name"))
+        for wallet in user_wallets:
+            if wallet["name"] == wallet_name:
+                return Transaction.objects.filter(
+                    Q(receiver__name=wallet_name) | Q(sender__name=wallet_name)
+                )
+        return
+
+    def list(self, request, *args, **kwargs):
+        """Lists transaction if exist. If not - 404"""
+        queryset = self.get_queryset()
+        if not queryset:
+            return Response(
+                {"Failed": "No such wallet for current user"}, status=HTTP_404_NOT_FOUND
+            )
+        else:
+            return super().list(self, request)

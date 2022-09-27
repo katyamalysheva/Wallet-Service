@@ -13,7 +13,7 @@ from rest_framework.generics import (
 from rest_framework.response import Response
 from rest_framework.status import HTTP_404_NOT_FOUND
 from WalletService.models import Transaction, Wallet
-from WalletService.permissions import SenderWalletOwnerPermission
+from WalletService.permissions import PostOrSafeMethodsOnly, SenderWalletOwnerPermission
 
 from .serializers import TransactionSerializer, UserRegisterSerializer, WalletSerializer
 
@@ -72,7 +72,11 @@ class WalletDetailView(RetrieveDestroyAPIView):
 class TransactionViewSet(viewsets.ModelViewSet):
     """API viewset for transactions"""
 
-    permission_classes = [permissions.IsAuthenticated, SenderWalletOwnerPermission]
+    permission_classes = [
+        permissions.IsAuthenticated,
+        PostOrSafeMethodsOnly,
+        SenderWalletOwnerPermission,
+    ]
     serializer_class = TransactionSerializer
     lookup_field = "id"
 

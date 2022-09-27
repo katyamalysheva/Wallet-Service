@@ -36,6 +36,6 @@ urlpatterns = [
     path("wallets/", WalletListView.as_view(), name="wallets-list"),
     path("wallets/<str:name>/", WalletDetailView.as_view()),
     path("transactions/", transaction_list),
-    path("transactions/<int:id>", transaction_detail),
-    path("transactions/<str:name>", WalletTransactionView.as_view()),
+    path("transactions/<int:id>/", transaction_detail),
+    path("transactions/<str:name>/", WalletTransactionView.as_view()),
 ]

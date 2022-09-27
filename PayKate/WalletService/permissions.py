@@ -1,9 +1,20 @@
 """WalletService custom permissions
 """
 from rest_framework import permissions
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import MethodNotAllowed, NotFound
 from WalletService.models import Wallet
 from WalletService.serializers import get_object_if_exists
+
+
+class PostOrSafeMethodsOnly(permissions.BasePermission):
+    """Permission for blocking all methods besides safe and post"""
+
+    def has_permission(self, request, view):
+        """Checks permissins for all request types"""
+        if request.method in permissions.SAFE_METHODS or request.method == "POST":
+            return True
+        else:
+            raise MethodNotAllowed(request.method)
 
 
 class SenderWalletOwnerPermission(permissions.BasePermission):

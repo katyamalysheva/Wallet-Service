@@ -87,6 +87,9 @@ DATABASES = {
         "PASSWORD": env("POSTGRES_USER_PSWD"),
         "HOST": "localhost",
         "PORT": 5432,
+        "TEST": {
+            "NAME": "test_walletservice",
+        },
     }
 }
 

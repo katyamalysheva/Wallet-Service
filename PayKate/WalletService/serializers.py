@@ -29,9 +29,9 @@ class UserRegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         """Creating user and hashing password"""
-        user = User.objects.create(
-            username=validated_data["username"], email=validated_data["email"]
-        )
+        user = User.objects.create(username=validated_data["username"])
+        if "email" in validated_data.keys():
+            user.email = validated_data["email"]
         user.set_password(validated_data["password"])
         user.save()
         return user
@@ -79,12 +79,12 @@ class WalletSerializer(serializers.ModelSerializer):
         if data["type"] not in CARDS:
             raise serializers.ValidationError(
                 f"{data['type']} is not a valid choice for wallet type. "
-                "Please choose among {CARDS}."
+                f"Please choose among {CARDS}."
             )
         if data["currency"] not in CURRENCIES:
             raise serializers.ValidationError(
                 f"{data['currency']} is not a valid choice for wallet currency. "
-                "Please choose among {CURRENCIES}."
+                f"Please choose among {CURRENCIES}."
             )
         return data
 
@@ -108,7 +108,7 @@ class WalletSerializer(serializers.ModelSerializer):
         wallet = Wallet.objects.create(
             name=name,
             **validated_data,
-            balance=Wallet.BONUS(validated_data["currency"]),
+            balance=Wallet.BONUS[validated_data["currency"]],
         )
         return wallet
 
